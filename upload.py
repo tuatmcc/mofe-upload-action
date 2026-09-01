@@ -34,13 +34,36 @@ def upload_testcases(client: Client, problem_config: ProblemConfig, testcases_zi
     for testcase_set_with_regex in problem_config.testcase_sets:
         regex_pattern = testcase_set_with_regex.regex
         testcase_set_base = testcase_set_with_regex.testcase_set
-        for existing_testcase_set_base in new_testcase_sets:
-            if existing_testcase_set_base.name == testcase_set_base.name:
-                testcase_set_id = existing_testcase_set_base.id
-                client.update_testcase_set(problem_id, testcase_set_id, testcase_set_base)
-                break
+
+        existing_testcase_set = next(
+            (
+                testcase_set
+                for testcase_set in new_testcase_sets
+                if testcase_set.name == testcase_set_base.name
+            ),
+            None,
+        )
+
+        if existing_testcase_set is not None:
+            testcase_set_id = existing_testcase_set.id
+            client.update_testcase_set(problem_id, testcase_set_id, testcase_set_base)
         else:
             client.create_testcase_set(problem_id, testcase_set_base)
+
+            # create_testcase_set は作成したセットを返さないため、
+            # 再取得して新しく作成したセットの ID を解決する。
+            new_testcase_sets, _ = client.get_testcases(problem_id)
+            created_testcase_set = next(
+                (
+                    testcase_set
+                    for testcase_set in new_testcase_sets
+                    if testcase_set.name == testcase_set_base.name
+                ),
+                None,
+            )
+            if created_testcase_set is None:
+                raise RuntimeError(f'作成したテストケースセット "{testcase_set_base.name}" が見つかりません')
+            testcase_set_id = created_testcase_set.id
 
         testcase_ids = []
         for testcase in new_testcases:
